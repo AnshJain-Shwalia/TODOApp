@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build & Compilation Output
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+!.env.template
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS System Files
+.DS_Store
+Thumbs.db
