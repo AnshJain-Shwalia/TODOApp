@@ -150,7 +150,7 @@ if (!req.headers['authorization']) {
   return res.status(401).send('Unauthorized');
 }
 ```
-Which architectural principles are violated here, and why does this make unit testing the `TodoService` difficult?
+Which architectural principles are violated here, and why does this make reusing the `TodoService` across non-HTTP contexts (e.g., CLI, background jobs) difficult?
 
 ### Question 2
 Suppose you want to add a feature where completing a task (`status = COMPLETED`) sends a real-time WebSocket notification and increments a metric counter in Prometheus. 
@@ -162,10 +162,9 @@ A junior developer writes a SQL query directly inside a Controller endpoint:
 Name **two major problems** with this approach—one related to security and one related to software architecture.
 
 ### Question 4
-Why should the `Repository` layer return database entities/objects rather than sending HTTP responses directly? What testing advantage does this separation provide?
+Why should the `Repository` layer return database entities/objects rather than sending HTTP responses directly? What architectural advantage does this separation provide?
 
 ---
-
 
 
 
@@ -203,7 +202,7 @@ Why should the `Repository` layer return database entities/objects rather than s
 - **Violations**:
   1. **Transport Layer Leakage**: The Service layer is accepting Express HTTP objects (`req`, `res`). The service layer should be completely agnostic of the transport mechanism (HTTP, gRPC, CLI, WebSockets).
   2. **Violation of Single Responsibility Principle**: Auth header checking is an HTTP concern belonging to Middleware or Controllers, not core business domain logic.
-- **Testing Impact**: You cannot unit test `TodoService` without mocking HTTP request/response objects.
+- **Reusability Impact**: You cannot execute `TodoService` methods in background queues, CLI commands, or microservices without constructing dummy HTTP request/response objects.
 
 ---
 
@@ -221,4 +220,4 @@ Why should the `Repository` layer return database entities/objects rather than s
 
 ### Solution 4
 - **Rationale**: Returning raw domain data objects allows the Service layer to combine, transform, or filter data from multiple repositories before deciding what to return.
-- **Testing Advantage**: It enables **Mocking / Stubbing**. You can mock the Repository in unit tests to return fake database objects without needing a live running database instance, allowing fast unit test execution.
+- **Architectural Advantage**: It enables **Data Composition and Decoupling**. Higher layers can compose, validate, or transform entities across multiple domains without leaking database or transport coupling into callers.

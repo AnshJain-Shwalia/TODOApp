@@ -33,7 +33,6 @@ _Reference: [02_layered_architecture_mvc.md](file:///home/ansh/Projects/TODOApp/
     - **Repository Layer (DAL)**: Handles database queries and **MikroORM** operations (`EntityRepository`, `SqlEntityManager`, `em.fork()`, `em.persist()`, `em.flush()`). _No HTTP token checks or status handling._
 - [ ] **Use Data Transfer Objects (DTOs)**: Define separate input DTOs (e.g., `CreateTodoDTO`) and output DTOs (e.g., `TodoResponseDTO`) to prevent exposing internal DB fields.
 - [ ] **Prevent SQL Injection**: Always use parameterized queries (`$1`, `$2`) or **MikroORM** query criteria/QueryBuilder (`em.find()`, `em.qb()`)—never concatenate dynamic user input strings into SQL statements.
-- [ ] **Decouple for Unit Testing**: Keep layers independent so Services and Repositories can be tested with stubs/mocks (e.g., mocking MikroORM's `EntityRepository` and `EntityManager`) without needing live DB or HTTP server instances.
 
 ---
 

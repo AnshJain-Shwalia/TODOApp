@@ -12,7 +12,6 @@ A production-ready, multi-tenant TODO application backend built with **NestJS**,
 - **Database Engine**: [PostgreSQL](https://www.postgresql.org/) (v16+)
 - **Configuration & Validation**: `@nestjs/config` & [Zod](https://zod.dev/)
 - **API Documentation**: OpenAPI / [Swagger](https://swagger.io/) (`@nestjs/swagger`)
-- **Testing Framework**: [Jest](https://jestjs.io/) & [SuperTest](https://github.com/ladjs/supertest)
 
 ---
 
@@ -84,30 +83,3 @@ npm run start:dev
 npm run build
 npm run start:prod
 ```
-
----
-
-## 🧪 Testing Standards
-
-Per workspace rules, we strictly enforce Test-Driven Development (TDD) and 100% test coverage:
-
-```bash
-# Run unit tests (mocking MikroORM repositories)
-npm run test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run test coverage report
-npm run test:cov
-
-# Run integration & E2E tests (against PostgreSQL test database)
-npm run test:e2e
-```
-
-### Unit Testing Guidelines
-- Unit tests (`*.spec.ts`) mock all external dependencies and MikroORM `EntityRepository` / `EntityManager` instances.
-- No live database connections are permitted during unit tests.
-
-### Integration & E2E Testing Guidelines
-- E2E tests run against a dedicated PostgreSQL database matching production database semantics.

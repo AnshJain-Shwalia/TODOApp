@@ -43,14 +43,11 @@ export const User = defineEntity({
     createdAt: p
       .datetime()
       .fieldName('created_at')
-      .columnType('timestamptz')
-      .onCreate(() => new Date()),
+      .columnType('timestamptz'),
     updatedAt: p
       .datetime()
       .fieldName('updated_at')
-      .columnType('timestamptz')
-      .onCreate(() => new Date())
-      .onUpdate(() => new Date()),
+      .columnType('timestamptz'),
     deletedAt: p
       .datetime()
       .fieldName('deleted_at')
@@ -61,6 +58,132 @@ export const User = defineEntity({
 
 // Infer the TypeScript interface automatically
 export type IUser = InferEntity<typeof User>;
+```
+
+---
+
+## 2.1 Defining Relationships & Explicit Pivot Entities (Standard)
+
+*(For a dedicated, comprehensive breakdown, see [mikroorm_relationships_and_pivot_entities.md](file:///home/ansh/Projects/TODOApp/guides/mikroorm_relationships_and_pivot_entities.md).)*
+
+In modern MikroORM v7, relationship mapping is done cleanly on the `p` builder without decorators.
+
+### A. One-to-Many & Many-to-One (1:N)
+The owning side (`Task`) defines `p.manyToOne` with `.fieldName('user_id')` and `.deleteRule('cascade')`. The parent side (`User`) defines `p.oneToMany` with `.mappedBy('user')`:
+
+```typescript
+// Child / Owning Side
+export const Task = defineEntity({
+  name: 'Task',
+  tableName: 'tasks',
+  properties: {
+    id: p.uuid().primary(),
+    title: p.string().length(255),
+    user: p
+      .manyToOne(() => User)
+      .fieldName('user_id')
+      .inversedBy('tasks')
+      .deleteRule('cascade'),
+  },
+});
+
+// Parent / Inverse Side
+export const User = defineEntity({
+  name: 'User',
+  tableName: 'users',
+  properties: {
+    id: p.uuid().primary(),
+    tasks: p.oneToMany(() => Task).mappedBy('user'),
+  },
+});
+```
+
+---
+
+### B. Many-to-Many: The Explicit Pivot Entity Standard (Approach 1)
+
+> 💡 **Best Practice Mandate**: Do not use implicit `p.manyToMany` join tables. Real-world applications require metadata columns (`createdAt`, `assignedBy`), direct queryability, and explicit DB index control. **Always decompose Many-to-Many relationships into two `1:N` relations with a dedicated Join Entity.**
+
+```typescript
+// 1. Explicit Pivot Entity (src/task/task-tag.entity.ts)
+export const TaskTag = defineEntity({
+  name: 'TaskTag',
+  tableName: 'task_tags',
+  primaryKeys: ['task', 'tag'], // Composite Primary Key
+  properties: {
+    task: p
+      .manyToOne(() => Task)
+      .fieldName('task_id')
+      .inversedBy('taskTags')
+      .deleteRule('cascade'),
+
+    tag: p
+      .manyToOne(() => Tag)
+      .fieldName('tag_id')
+      .inversedBy('taskTags')
+      .deleteRule('cascade'),
+
+    // ✨ Explicit pivot payload / metadata
+    createdAt: p
+      .datetime()
+      .fieldName('created_at')
+      .columnType('timestamptz'),
+
+    assignedBy: p
+      .string()
+      .fieldName('assigned_by')
+      .length(255)
+      .nullable(),
+  },
+});
+
+export type ITaskTag = InferEntity<typeof TaskTag>;
+```
+
+```typescript
+// 2. Task Entity (src/task/task.entity.ts)
+export const Task = defineEntity({
+  name: 'Task',
+  tableName: 'tasks',
+  properties: {
+    id: p.uuid().primary(),
+    title: p.string().length(255),
+    taskTags: p.oneToMany(() => TaskTag).mappedBy('task'),
+  },
+});
+
+// 3. Tag Entity (src/tag/tag.entity.ts)
+export const Tag = defineEntity({
+  name: 'Tag',
+  tableName: 'tags',
+  properties: {
+    id: p.uuid().primary(),
+    name: p.string().length(50).unique(),
+    taskTags: p.oneToMany(() => TaskTag).mappedBy('tag'),
+  },
+});
+```
+
+#### Working with the Explicit Pivot Entity:
+```typescript
+// 1. Linking a task and tag with metadata:
+this.taskTagRepo.create({
+  task,
+  tag,
+  assignedBy: currentUser.id,
+  createdAt: new Date(),
+});
+await this.em.flush();
+
+// 2. Querying with nested population:
+const task = await this.taskRepo.findOne(
+  { id: taskId },
+  { populate: ['taskTags.tag'] },
+);
+
+// 3. Unlinking without deleting Task or Tag:
+const link = await this.taskTagRepo.findOne({ task: taskId, tag: tagId });
+if (link) await this.em.removeAndFlush(link);
 ```
 
 ---
@@ -300,25 +423,3 @@ export class TaskCronService {
 | :--- | :--- | :--- | :--- |
 | **HTTP Request** (Controller $\rightarrow$ Service) | **Yes** (created by HTTP middleware) | Request-scoped private `EntityManager` | None (use `this.em` and repositories normally) |
 | **Background Task** (Cron, Queue, Timers) | **No** (unless wrapped) | Global Root `EntityManager` ⚠️ | Use `this.em.fork()` or `@CreateRequestContext()` |
-
----
-
-## 6. Unit Testing Standard (No Real DB Needed)
-
-In our project, unit tests mock repositories cleanly using Jest:
-
-```typescript
-const mockUserRepo = {
-  find: jest.fn(),
-  findOne: jest.fn(),
-  findOneOrFail: jest.fn(),
-  create: jest.fn((dto) => ({ ...dto, id: '123' })),
-};
-
-const mockEm = {
-  flush: jest.fn(),
-  persist: jest.fn(),
-};
-```
-
-This keeps unit tests running in milliseconds with 100% test isolation, while integration/E2E tests validate actual database queries against PostgreSQL.

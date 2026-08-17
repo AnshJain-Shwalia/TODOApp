@@ -73,5 +73,4 @@ This document specifies the **Functional Requirements (FR)** and **Non-Functiona
   - Schema & Migrations: MikroORM Migrations (`@mikro-orm/migrations`) and Schema Generator (`@mikro-orm/postgresql`).
   - Request Context: MikroORM Request Context / `em.fork()` for isolated request-scoped transactions.
 - **Validation & Environment**: Zod for environment configuration validation and input DTO schemas.
-- **Testing Standard**: Jest with pure isolation for unit tests (mocking MikroORM repositories) and dedicated PostgreSQL test instances for integration/E2E tests.
 

@@ -26,7 +26,7 @@ A single user owns multiple projects; a project contains multiple tasks.
 - **SQL Implementation**: Place the **Foreign Key (FK)** on the "Many" side table.
   ```sql
   CREATE TABLE todos (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id UUID PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
       title VARCHAR(255) NOT NULL
@@ -34,59 +34,86 @@ A single user owns multiple projects; a project contains multiple tasks.
   ```
 - **MikroORM Implementation**:
   ```typescript
-  import { Entity, PrimaryKey, Property, ManyToOne, Rel } from '@mikro-orm/core';
+  import { defineEntity, p, type InferEntity } from '@mikro-orm/core';
   import { User } from './user.entity';
   import { Project } from './project.entity';
 
-  @Entity({ tableName: 'todos' })
-  export class Todo {
-    @PrimaryKey({ type: 'uuid' })
-    id: string;
+  export const Todo = defineEntity({
+    name: 'Todo',
+    tableName: 'todos',
+    properties: {
+      id: p.uuid().primary(),
+      title: p.string().length(255),
+      user: p
+        .manyToOne(() => User)
+        .fieldName('user_id')
+        .deleteRule('cascade'),
+      project: p
+        .manyToOne(() => Project)
+        .fieldName('project_id')
+        .nullable()
+        .deleteRule('set null'),
+    },
+  });
 
-    @ManyToOne(() => User, { deleteRule: 'cascade' })
-    user: Rel<User>;
-
-    @ManyToOne(() => Project, { nullable: true, deleteRule: 'set null' })
-    project?: Rel<Project>;
-
-    @Property({ length: 255 })
-    title: string;
-  }
+  export type ITodo = InferEntity<typeof Todo>;
   ```
 
-### B. Many-to-Many (N:M)
-A task can have multiple tags (`#urgent`, `#work`), and a tag can be attached to multiple tasks.
+### B. Many-to-Many (N:M) via Explicit Pivot Entity
+A task can have multiple tags (`#urgent`, `#work`), and a tag can be attached to multiple tasks. In production, **always use an explicit pivot entity** so you can attach metadata (`createdAt`, `assignedBy`), control indexing, and perform direct queries.
+
 - **SQL Implementation**: Requires a **Join Table (Pivot Table)** with a composite primary key.
   ```sql
   CREATE TABLE tags (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id UUID PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id),
       name VARCHAR(50) NOT NULL
   );
 
-  -- Join Table
+  -- Join Table with Metadata (Dumb DB - no server defaults)
   CREATE TABLE todo_tags (
       todo_id UUID NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
       tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL,
+      assigned_by VARCHAR(255) NULL,
       PRIMARY KEY (todo_id, tag_id)
   );
   ```
-- **MikroORM Implementation**:
+- **MikroORM Implementation (Explicit Pivot Pattern)**:
   ```typescript
-  import { Entity, PrimaryKey, Property, ManyToMany, Collection } from '@mikro-orm/core';
+  import { defineEntity, p, type InferEntity } from '@mikro-orm/core';
+  import { Todo } from './todo.entity';
   import { Tag } from './tag.entity';
 
-  @Entity({ tableName: 'todos' })
-  export class Todo {
-    @PrimaryKey({ type: 'uuid' })
-    id: string;
+  // 1. Explicit Pivot Entity (Dumb ORM - no onCreate hooks)
+  export const TodoTag = defineEntity({
+    name: 'TodoTag',
+    tableName: 'todo_tags',
+    primaryKeys: ['todo', 'tag'],
+    properties: {
+      todo: p
+        .manyToOne(() => Todo)
+        .fieldName('todo_id')
+        .inversedBy('todoTags')
+        .deleteRule('cascade'),
+      tag: p
+        .manyToOne(() => Tag)
+        .fieldName('tag_id')
+        .inversedBy('todoTags')
+        .deleteRule('cascade'),
+      createdAt: p
+        .datetime()
+        .fieldName('created_at')
+        .columnType('timestamptz'),
+      assignedBy: p.string().fieldName('assigned_by').nullable(),
+    },
+  });
 
-    @ManyToMany(() => Tag, tag => tag.todos, {
-      owner: true,
-      pivotTable: 'todo_tags',
-    })
-    tags = new Collection<Tag>(this);
-  }
+  export type ITodoTag = InferEntity<typeof TodoTag>;
+
+  // 2. Parent Entities connect via oneToMany
+  // export const Todo = defineEntity({ ..., properties: { todoTags: p.oneToMany(() => TodoTag).mappedBy('todo') } });
+  // export const Tag = defineEntity({ ..., properties: { todoTags: p.oneToMany(() => TodoTag).mappedBy('tag') } });
   ```
 
 ---
@@ -105,11 +132,14 @@ An **Index** is a data structure (usually a B-Tree) that speeds up data retrieva
    ```
    In MikroORM entity definitions:
    ```typescript
-   @Entity({ tableName: 'todos' })
-   @Index({ properties: ['user', 'status'] })
-   export class Todo {
-     // ...
-   }
+   export const Todo = defineEntity({
+     name: 'Todo',
+     tableName: 'todos',
+     indexes: [{ properties: ['user', 'status'] }],
+     properties: {
+       // ...
+     },
+   });
    ```
 
 ---

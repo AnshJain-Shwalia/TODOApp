@@ -1,27 +1,10 @@
 # Workspace Rules & Development Standards
 
-## 1. Test-Driven Development (TDD) — Strict Practice
-- **Mandatory TDD Workflow**: All feature implementation and bug fixes MUST strictly follow the **Red-Green-Refactor** cycle:
-  1. **Red**: Write a failing test first.
-  2. **Green**: Write minimal code to pass the test.
-  3. **Refactor**: Clean up code while keeping tests green.
-- Never write production logic without a failing test first.
-
-## 2. Integration & E2E Testing Database Standard
-- **Production Engine Parity**: All integration/E2E database tests MUST use a **PostgreSQL** database (matching production engine) via a dedicated test container/database with **MikroORM** schema management / migrations (`@mikro-orm/postgresql`).
-
-## 3. Unit Testing Standard
-- **Pure Isolation**: Unit tests (`*.spec.ts`) must mock all external providers and repositories (`useValue` / `jest.fn()`), including MikroORM `EntityRepository` and `EntityManager` (`EntityManager.fork()`, `em.persist()`, `em.flush()`). No live database connections during unit tests.
-
-## 4. Code Testability & 100% Coverage Commit Enforcement
-- **Design for Testability**: All production code MUST be written such that it is easily testable (loosely coupled, clean interfaces, dependency injection).
-- **Strict 100% Test & Edge-Case Coverage**: All commits MUST be thoroughly checked to guarantee 100% test coverage including all happy paths, error branches, and edge cases.
-- **Commit Rejection & Reversal**: Any code that fails to achieve 100% test and edge-case coverage MUST NOT be committed. If unverified or under-covered code is committed, it MUST be immediately reverted.
-
-## 5. ORM & Persistence Layer Standard (MikroORM)
+## 1. ORM & Persistence Layer Standard (MikroORM)
 - **MikroORM Standard**: **MikroORM** (`@mikro-orm/core`, `@mikro-orm/postgresql`, `@mikro-orm/nestjs`) is the sole designated ORM for entity definitions, database modeling, migrations, and repository access.
 - **Data Mapper & Unit of Work**: Leverage MikroORM's Data Mapper and Unit of Work (Identity Map) architecture. Do not use Active Record patterns.
-- **Request Context**: Always operate within MikroORM's request context or use `em.fork()` for isolated transactions and asynchronous background operations.
 
-
-
+## 2. Dumb ORM & Dumb Database Standard (Explicit Application Authority)
+- **No ORM Lifecycle Hooks**: Entity schemas (`defineEntity`) must NOT use `.onCreate()`, `.onUpdate()`, or property-level default hooks.
+- **No Database Server Defaults**: PostgreSQL DDL / schemas must NOT rely on server-side defaults (`DEFAULT NOW()`, `DEFAULT gen_random_uuid()`, `DEFAULT <value>`).
+- **Explicit Application Authority**: The application/service layer is the single authority for generating primary keys (UUIDs), setting initial default values, and managing timestamps (`createdAt`, `updatedAt`, `deletedAt`). All values must be explicitly supplied in domain logic and DTOs.
