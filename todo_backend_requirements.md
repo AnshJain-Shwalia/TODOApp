@@ -7,9 +7,9 @@ This document specifies the **Functional Requirements (FR)** and **Non-Functiona
 ## 1. Functional Requirements (FR)
 
 ### FR-1: User Authentication & Identity Management
-- **FR-1.1**: The system must allow users to authenticate using Sign in with Google (OAuth2 / OpenID Connect). Email and password sign-in is not supported.
-- **FR-1.2**: For first-time Google sign-ins, the system must automatically provision a user account using the profile details provided by Google (e.g., email, full name, Google subject ID).
-- **FR-1.3**: The system must validate Google ID tokens / authorization credentials securely and issue a session token / credential for subsequent protected API requests.
+- **FR-1.1**: The system must allow users to authenticate using both Sign in with Google (OAuth2 / OpenID Connect) and traditional Email & Password verification.
+- **FR-1.2**: For first-time Google sign-ins, the system must automatically provision a user account using profile details provided by Google (e.g., email, full name, Google subject ID). For Email/Password registration, passwords must be securely hashed before storage.
+- **FR-1.3**: The system must validate Google ID tokens / OAuth credentials as well as email/password credentials securely, issuing session access tokens and refresh tokens for subsequent protected API requests (supporting SPA web and mobile clients).
 - **FR-1.4**: Users must be able to retrieve and update their own profile details.
 
 ### FR-2: Project / Category Management
@@ -61,3 +61,17 @@ This document specifies the **Functional Requirements (FR)** and **Non-Functiona
 ### NFR-4: API Semantics & Idempotency
 - **NFR-4.1**: HTTP methods (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) and HTTP status codes must be used appropriately according to REST principles.
 - **NFR-4.2**: `GET`, `PUT`, and `DELETE` requests must be idempotent.
+
+---
+
+## 3. Technology Stack & Architectural Standards
+
+- **Application Framework**: NestJS (v11+) with TypeScript.
+- **Database Engine**: PostgreSQL (v16+).
+- **ORM / Persistence Layer**: **MikroORM** (`@mikro-orm/core`, `@mikro-orm/postgresql`, `@mikro-orm/nestjs`).
+  - Architectural Pattern: **Data Mapper** & **Unit of Work** (Identity Map).
+  - Schema & Migrations: MikroORM Migrations (`@mikro-orm/migrations`) and Schema Generator (`@mikro-orm/postgresql`).
+  - Request Context: MikroORM Request Context / `em.fork()` for isolated request-scoped transactions.
+- **Validation & Environment**: Zod for environment configuration validation and input DTO schemas.
+- **Testing Standard**: Jest with pure isolation for unit tests (mocking MikroORM repositories) and dedicated PostgreSQL test instances for integration/E2E tests.
+

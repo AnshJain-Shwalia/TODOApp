@@ -23,7 +23,7 @@ Selecting the right Primary Key (PK) strategy is a fundamental data modeling dec
 
 ### A. One-to-Many (1:N)
 A single user owns multiple projects; a project contains multiple tasks.
-- **Implementation**: Place the **Foreign Key (FK)** on the "Many" side table.
+- **SQL Implementation**: Place the **Foreign Key (FK)** on the "Many" side table.
   ```sql
   CREATE TABLE todos (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -32,10 +32,31 @@ A single user owns multiple projects; a project contains multiple tasks.
       title VARCHAR(255) NOT NULL
   );
   ```
+- **MikroORM Implementation**:
+  ```typescript
+  import { Entity, PrimaryKey, Property, ManyToOne, Rel } from '@mikro-orm/core';
+  import { User } from './user.entity';
+  import { Project } from './project.entity';
+
+  @Entity({ tableName: 'todos' })
+  export class Todo {
+    @PrimaryKey({ type: 'uuid' })
+    id: string;
+
+    @ManyToOne(() => User, { deleteRule: 'cascade' })
+    user: Rel<User>;
+
+    @ManyToOne(() => Project, { nullable: true, deleteRule: 'set null' })
+    project?: Rel<Project>;
+
+    @Property({ length: 255 })
+    title: string;
+  }
+  ```
 
 ### B. Many-to-Many (N:M)
 A task can have multiple tags (`#urgent`, `#work`), and a tag can be attached to multiple tasks.
-- **Implementation**: Requires a **Join Table (Pivot Table)** with a composite primary key.
+- **SQL Implementation**: Requires a **Join Table (Pivot Table)** with a composite primary key.
   ```sql
   CREATE TABLE tags (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -49,6 +70,23 @@ A task can have multiple tags (`#urgent`, `#work`), and a tag can be attached to
       tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
       PRIMARY KEY (todo_id, tag_id)
   );
+  ```
+- **MikroORM Implementation**:
+  ```typescript
+  import { Entity, PrimaryKey, Property, ManyToMany, Collection } from '@mikro-orm/core';
+  import { Tag } from './tag.entity';
+
+  @Entity({ tableName: 'todos' })
+  export class Todo {
+    @PrimaryKey({ type: 'uuid' })
+    id: string;
+
+    @ManyToMany(() => Tag, tag => tag.todos, {
+      owner: true,
+      pivotTable: 'todo_tags',
+    })
+    tags = new Collection<Tag>(this);
+  }
   ```
 
 ---
@@ -65,6 +103,14 @@ An **Index** is a data structure (usually a B-Tree) that speeds up data retrieva
    -- Speeds up queries like: SELECT * FROM todos WHERE user_id = '...' AND status = 'PENDING';
    CREATE INDEX idx_todos_user_status ON todos(user_id, status);
    ```
+   In MikroORM entity definitions:
+   ```typescript
+   @Entity({ tableName: 'todos' })
+   @Index({ properties: ['user', 'status'] })
+   export class Todo {
+     // ...
+   }
+   ```
 
 ---
 
@@ -80,9 +126,49 @@ ALTER TABLE todos ADD COLUMN deleted_at TIMESTAMP NULL;
 ```
 > ⚠️ **Caution**: Every `SELECT` query must explicitly include `WHERE is_deleted = false` to avoid leaking trashed items!
 
+### MikroORM Soft Delete with Filters:
+In MikroORM, you can use entity filters so soft-deleted rows are automatically excluded from all queries without writing manual `WHERE is_deleted = false` conditions:
+```typescript
+@Entity({ tableName: 'todos' })
+@Filter({ name: 'softDelete', cond: { isDeleted: false }, default: true })
+export class Todo {
+  @Property({ default: false })
+  isDeleted: boolean = false;
+
+  @Property({ nullable: true })
+  deletedAt?: Date;
+}
+```
+
 ---
 
-## 5. Difficult Quiz (Module 3)
+## 5. Type-Safe Complex Queries with Kysely & MikroORM
+
+While MikroORM handles standard entity lifecycle, Unit of Work, and relationships, complex analytical or multi-join reporting queries can be written using **Kysely** via MikroORM's first-class integration (`@mikro-orm/kysely` / `em.getKysely()`):
+
+```typescript
+const kysely = em.getKysely({
+  tableNamingStrategy: 'entity',     // Query by entity name (e.g. 'User', 'Project')
+  columnNamingStrategy: 'property',  // Query by TS property (e.g. 'firstName', 'googleId')
+});
+
+const results = await kysely
+  .selectFrom('User as u')
+  .innerJoin('Project as p', 'p.user', 'u.id')
+  .select(['u.firstName', 'p.name'])
+  .where('u.googleId', '=', 'oauth_123')
+  .execute();
+```
+
+### Under the Hood:
+- **Metadata-Driven AST Translation**: MikroORM transforms TypeScript property names (`firstName`, `googleId`) in the Kysely AST into the exact database column names (`first_name`, `google_id` / custom `fieldName`) before sending SQL to PostgreSQL.
+- **Participates in Transactions**: `em.getKysely()` automatically runs inside the current `em.transactional()` context.
+- **Detailed Mental Model**: For an in-depth lifecycle and comparison with standalone `kysely-codegen`, see [mikroorm_and_kysely_mental_model.md](file:///home/ansh/Projects/TODOApp/guides/mikroorm_and_kysely_mental_model.md).
+- **Practical MikroORM & QueryBuilder Guide**: For a straightforward guide to standard CRUD, `repo.createQueryBuilder()`, and bug prevention rules without Kysely, see [mikroorm_practical_guide.md](file:///home/ansh/Projects/TODOApp/guides/mikroorm_practical_guide.md).
+
+---
+
+## 6. Difficult Quiz (Module 3)
 
 Test your data modeling knowledge!
 

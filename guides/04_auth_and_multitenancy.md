@@ -43,7 +43,8 @@ async function getTodoById(req: Request, res: Response) {
   const todoId = req.params.id; // User inputs /todos/555
   
   // BUG: Fetches item purely by ID regardless of owner!
-  const todo = await db.query('SELECT * FROM todos WHERE id = $1', [todoId]);
+  // In raw SQL: SELECT * FROM todos WHERE id = $1
+  const todo = await em.findOne(Todo, { id: todoId });
   
   if (!todo) return res.status(404).json({ error: 'Not found' });
   return res.json(todo); // Attacker can read ANY user's todo!
@@ -56,11 +57,15 @@ async function getTodoById(req: Request, res: Response) {
   const todoId = req.params.id;
   const currentUserId = req.user.id; // From verified Auth Middleware!
   
-  // SECURE: Enforces ownership constraint in query!
-  const todo = await db.query(
-    'SELECT * FROM todos WHERE id = $1 AND user_id = $2 AND is_deleted = false',
-    [todoId, currentUserId]
-  );
+  // SECURE (MikroORM): Enforces ownership constraint directly in query criteria!
+  const todo = await em.findOne(Todo, {
+    id: todoId,
+    user: currentUserId,
+    isDeleted: false,
+  });
+  
+  // Equivalent SQL:
+  // SELECT * FROM todos WHERE id = $1 AND user_id = $2 AND is_deleted = false
   
   if (!todo) return res.status(404).json({ error: 'Task not found' });
   return res.json(todo);

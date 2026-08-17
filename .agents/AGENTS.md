@@ -8,14 +8,20 @@
 - Never write production logic without a failing test first.
 
 ## 2. Integration & E2E Testing Database Standard
-- **Production Engine Parity**: All integration/E2E database tests MUST use a **PostgreSQL** database (matching production engine) via a dedicated test container/database.
+- **Production Engine Parity**: All integration/E2E database tests MUST use a **PostgreSQL** database (matching production engine) via a dedicated test container/database with **MikroORM** schema management / migrations (`@mikro-orm/postgresql`).
 
 ## 3. Unit Testing Standard
-- **Pure Isolation**: Unit tests (`*.spec.ts`) must mock all external providers and repositories (`useValue` / `jest.fn()`). No live database connections during unit tests.
+- **Pure Isolation**: Unit tests (`*.spec.ts`) must mock all external providers and repositories (`useValue` / `jest.fn()`), including MikroORM `EntityRepository` and `EntityManager` (`EntityManager.fork()`, `em.persist()`, `em.flush()`). No live database connections during unit tests.
 
 ## 4. Code Testability & 100% Coverage Commit Enforcement
 - **Design for Testability**: All production code MUST be written such that it is easily testable (loosely coupled, clean interfaces, dependency injection).
 - **Strict 100% Test & Edge-Case Coverage**: All commits MUST be thoroughly checked to guarantee 100% test coverage including all happy paths, error branches, and edge cases.
 - **Commit Rejection & Reversal**: Any code that fails to achieve 100% test and edge-case coverage MUST NOT be committed. If unverified or under-covered code is committed, it MUST be immediately reverted.
+
+## 5. ORM & Persistence Layer Standard (MikroORM)
+- **MikroORM Standard**: **MikroORM** (`@mikro-orm/core`, `@mikro-orm/postgresql`, `@mikro-orm/nestjs`) is the sole designated ORM for entity definitions, database modeling, migrations, and repository access.
+- **Data Mapper & Unit of Work**: Leverage MikroORM's Data Mapper and Unit of Work (Identity Map) architecture. Do not use Active Record patterns.
+- **Request Context**: Always operate within MikroORM's request context or use `em.fork()` for isolated transactions and asynchronous background operations.
+
 
 

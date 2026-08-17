@@ -114,22 +114,25 @@ export class TodoService {
 }
 ```
 
-### 3. Repository Layer (`TodoRepository.ts`)
+### 3. Repository Layer (`TodoRepository.ts` / MikroORM)
 ```typescript
-import { Database } from '../db';
+import { EntityRepository, EntityManager } from '@mikro-orm/postgresql';
+import { Todo } from './todo.entity';
 
 export class TodoRepository {
-  constructor(private db: Database) {}
+  constructor(
+    private readonly repo: EntityRepository<Todo>,
+    private readonly em: EntityManager
+  ) {}
 
-  async create(taskData: any) {
-    const query = `
-      INSERT INTO todos (user_id, title, priority, project_id, status)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *;
-    `;
-    const values = [taskData.user_id, taskData.title, taskData.priority, taskData.project_id, taskData.status];
-    const result = await this.db.query(query, values);
-    return result.rows[0];
+  async create(taskData: Partial<Todo>): Promise<Todo> {
+    const todo = this.repo.create(taskData as Todo);
+    await this.em.persistAndFlush(todo);
+    return todo;
+  }
+
+  async findById(id: string, userId: string): Promise<Todo | null> {
+    return this.repo.findOne({ id, user: userId, isDeleted: false });
   }
 }
 ```

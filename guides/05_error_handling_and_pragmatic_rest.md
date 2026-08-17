@@ -152,7 +152,7 @@ When should a backend engineering team choose **gRPC (RPC)** over **REST (JSON/H
 ## Solutions & Detailed Rationale
 
 ### Solution 1
-- **Option A (Atomic Transaction - Recommended for consistency)**: Wrap the bulk operation in a single database transaction. If *any* ID fails validation, rollback the entire transaction and return `404 Not Found` or `422 Unprocessable Entity`. This prevents inconsistent partial state.
+- **Option A (Atomic Transaction - Recommended for consistency)**: Wrap the bulk operation in a single database transaction (e.g. using MikroORM's `em.transactional(async (em) => { ... })` or Unit of Work automatic transactional flush). If *any* ID fails validation, rollback the entire transaction and return `404 Not Found` or `422 Unprocessable Entity`. This prevents inconsistent partial state.
 - **Option B (Partial Success - `207 Multi-Status` or `200 OK` with payload)**: Return a payload listing succeeded and failed IDs:
   ```json
   { "succeeded": ["id1", "id2"], "failed": [{"id": "id3", "reason": "Not found"}] }
