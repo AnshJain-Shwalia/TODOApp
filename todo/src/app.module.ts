@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { defineConfig, PostgreSqlDriver } from '@mikro-orm/postgresql';
 import { validate } from './config/env.validation';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
+import { User } from './user/user.entity';
+import { ProjectModule } from './project/project.module';
+import { TaskModule } from './task/task.module';
+import { TagModule } from './tag/tag.module';
 
 @Module({
   imports: [
@@ -14,30 +19,34 @@ import { UserModule } from './user/user.module';
       validate,
     }),
 
-    // 2. Configure TypeORM asynchronously using ConfigService
-    TypeOrmModule.forRootAsync({
+    // 2. Configure MikroORM asynchronously using ConfigService
+    MikroOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
+      driver: PostgreSqlDriver,
       useFactory: (configService: ConfigService) => {
         const isDev = configService.get<string>('NODE_ENV') === 'development';
 
-        return {
-          type: 'postgres',
+        return defineConfig({
+          driver: PostgreSqlDriver,
           host: configService.get<string>('DB_HOST'),
-          port: configService.get<number>('DB_PORT'), // Guaranteed to be a number at runtime
-          username: configService.get<string>('DB_USERNAME'),
+          port: configService.get<number>('DB_PORT'),
+          user: configService.get<string>('DB_USERNAME'),
           password: configService.get<string>('DB_PASSWORD'),
-          database: configService.get<string>('DB_NAME'),
-          autoLoadEntities: true,
-          synchronize: isDev,
-          dropSchema: isDev, // Drops schema on boot during development as requested
-          logging: isDev ? ['query', 'error'] : ['error'],
-          logger: 'advanced-console',
-        };
+          dbName: configService.get<string>('DB_NAME'),
+          entities: [User],
+          debug: isDev,
+        });
       },
     }),
 
     UserModule,
+
+    ProjectModule,
+
+    TaskModule,
+
+    TagModule,
   ],
   controllers: [AppController],
   providers: [AppService],
