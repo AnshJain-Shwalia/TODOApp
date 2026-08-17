@@ -230,13 +230,76 @@ If things ever seem "broken" or behave unexpectedly, check these four areas:
   // TypeScript compiler now knows `taskWithProject.project.name` is loaded and safe to access!
   ```
 
-### 4. Background Jobs & Timers: Use `em.fork()`
-* Inside standard NestJS HTTP requests, MikroORM manages request context automatically via middleware.
-* For asynchronous background tasks (cron jobs, queues, or detached promises outside the HTTP lifecycle), obtain an isolated context:
-  ```typescript
-  const forkEm = this.em.fork();
-  // Perform queries and operations using forkEm
-  ```
+### 4. Background Jobs & Timers: Request Context & `em.fork()`
+*(For a comprehensive architectural breakdown and complex production failure scenarios, see [Module 6: AsyncLocalStorage & Request Context](file:///home/ansh/Projects/TODOApp/guides/06_async_local_storage_and_request_context.md).)*
+
+#### Why Background Tasks Need Special Handling (`AsyncLocalStorage`)
+MikroORM tracks entities in memory using an **Identity Map** (the "work desk"). To keep concurrent operations isolated without manually passing context objects through every service function:
+
+1. **HTTP Requests (Automatic Isolation)**:
+   - When an HTTP request enters NestJS, MikroORM's middleware creates a request-scoped `EntityManager` (`rootEm.fork()`) and wraps the call chain in Node's **`AsyncLocalStorage`** (ALS) via `RequestContext.create()`.
+   - Every service or repository calling `this.em` automatically resolves to that request's private `EntityManager` via `als.getStore()`.
+   - When the HTTP response finishes, the context closes and all cached entities are garbage collected.
+
+2. **Background Tasks / Crons (No Automatic Context)**:
+   - Tasks running outside the HTTP lifecycle (`@Cron()`, BullMQ workers, `setInterval`, or detached promises) never trigger the HTTP middleware.
+   - Because no ALS store exists (`als.getStore() === undefined`), MikroORM falls back to the **Global Root `EntityManager`**.
+   - **Root EntityManager hazards**:
+     - **Memory Leaks**: Every entity loaded across all cron runs stays cached in root memory forever.
+     - **Stale Data**: Subsequent runs return stale in-memory objects rather than fresh database records.
+     - **Cross-Job State Pollution**: Calling `await this.em.flush()` in one worker flushes dirty, half-modified entities from any other worker sharing the root EM.
+
+#### How to Handle Background Tasks
+
+**Option A: Manual Forking (`this.em.fork()`)**
+```typescript
+@Injectable()
+export class TaskCronService {
+  constructor(private readonly em: EntityManager) {}
+
+  @Cron('0 * * * *')
+  async cleanupOldTasks() {
+    // 1. Obtain a fresh, isolated EntityManager
+    const forkEm = this.em.fork();
+
+    // 2. Perform all queries and mutations on the forked instance
+    const oldTasks = await forkEm.find(Task, { status: 'ARCHIVED' });
+    for (const task of oldTasks) {
+      task.deletedAt = new Date();
+    }
+
+    // 3. Flush changes isolated to this work desk
+    await forkEm.flush();
+  }
+}
+```
+
+**Option B: Automatic ALS Wrapping (`@CreateRequestContext()`)**
+```typescript
+import { CreateRequestContext, EntityManager } from '@mikro-orm/postgresql';
+
+@Injectable()
+export class TaskCronService {
+  constructor(private readonly em: EntityManager) {}
+
+  @Cron('0 * * * *')
+  @CreateRequestContext() // Wraps method execution in an ALS bubble with a forked EM automatically
+  async cleanupOldTasks() {
+    const oldTasks = await this.em.find(Task, { status: 'ARCHIVED' });
+    for (const task of oldTasks) {
+      task.deletedAt = new Date();
+    }
+    await this.em.flush();
+  }
+}
+```
+
+#### Comparison Matrix
+
+| Execution Context | `AsyncLocalStorage` Active? | Resolved `this.em` | Action Needed |
+| :--- | :--- | :--- | :--- |
+| **HTTP Request** (Controller $\rightarrow$ Service) | **Yes** (created by HTTP middleware) | Request-scoped private `EntityManager` | None (use `this.em` and repositories normally) |
+| **Background Task** (Cron, Queue, Timers) | **No** (unless wrapped) | Global Root `EntityManager` ⚠️ | Use `this.em.fork()` or `@CreateRequestContext()` |
 
 ---
 
