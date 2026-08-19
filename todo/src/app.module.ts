@@ -10,6 +10,7 @@ import { User } from './user/user.entity';
 import { ProjectModule } from './project/project.module';
 import { TaskModule } from './task/task.module';
 import { TagModule } from './tag/tag.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -47,6 +48,8 @@ import { TagModule } from './tag/tag.module';
     TaskModule,
 
     TagModule,
+
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
